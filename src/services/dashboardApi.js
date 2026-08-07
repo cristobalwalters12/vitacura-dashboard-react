@@ -72,8 +72,7 @@ function normalizeApiResponse(summary, map) {
       usuarios: summary.resumen_operacional.usuarios,
       usuariosActivos: summary.resumen_operacional.usuarios_activos,
       dispositivos: summary.resumen_operacional.dispositivos,
-      dispositivosActivos:
-        summary.resumen_operacional.dispositivos_activos,
+      dispositivosActivos: summary.resumen_operacional.dispositivos_activos,
       bateriaBaja: summary.resumen_operacional.bateria_baja,
       perfilesCuidado: summary.resumen_operacional.perfiles_cuidado,
       dependenciaSevera: summary.resumen_operacional.dependencia_severa,
@@ -138,3 +137,5 @@ export async function getDashboardSnapshot({
   ]);
   return normalizeApiResponse(summary, map);
 }
+
+//test
