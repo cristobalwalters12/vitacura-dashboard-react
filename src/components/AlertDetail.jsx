@@ -96,7 +96,7 @@ function DetailSkeleton() {
       <b />
       <b />
       <b />
-      <small>Cargando trazabilidad desde MongoDB…</small>
+      <small>Cargando trazabilidad del caso…</small>
     </div>
   );
 }

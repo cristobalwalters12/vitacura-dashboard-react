@@ -44,7 +44,7 @@ npm run check       # audita la data, compila y verifica rendimiento
 
 ## Fuente de datos actual
 
-La demo usa un escenario sintético y reproducible de 20.000 alertas con fecha de corte fija al 15 de agosto de 2026. MongoDB Atlas es la fuente principal cuando la API está configurada; `public/data/dashboard-data.json` conserva el mismo escenario como respaldo local. `build-data.mjs` regenera las alertas con una semilla fija y reglas declaradas en `scripts/scenario.config.mjs`.
+La demo usa un escenario sintético y reproducible de 20.000 alertas con fecha de corte fija al 15 de agosto de 2026. La API puede utilizar MongoDB Atlas o PostgreSQL/PostGIS sin cambiar el contrato del frontend; `public/data/dashboard-data.json` conserva el mismo escenario como respaldo local. `build-data.mjs` regenera las alertas con una semilla fija y reglas declaradas en `scripts/scenario.config.mjs`.
 
 El escenario contiene cinco historias analíticas verificables: aumento médico reciente, concentración nocturna de seguridad, presión operacional localizada, uso intensivo de la red de cuidado y casos de IA que requieren revisión humana. No son valores escritos manualmente dentro de los componentes ni representan hechos reales de Vitacura.
 
@@ -68,7 +68,15 @@ Copia `.env.example` como `.env.local` y configura:
 VITE_API_BASE_URL=http://localhost:3000
 ```
 
-Si `VITE_API_BASE_URL` está vacío, la aplicación utiliza el snapshot local. Si tiene un valor, `src/services/dashboardApi.js` carga primero `/api/v1/dashboard/resumen` y `/api/v1/dashboard/mapa`; `/api/v1/dashboard/analitica` se resuelve de forma progresiva sin bloquear la vista principal. Los cambios de período, filtros operacionales, comparaciones y hallazgos se calculan en MongoDB, no en el navegador. Resumen, mapa, analítica y detalle mantienen cachés con duraciones distintas; mover el mapa no repite la consulta de analítica.
+Si `VITE_API_BASE_URL` está vacío, la aplicación utiliza el snapshot local. Si tiene un valor, `src/services/dashboardApi.js` carga primero `/api/v1/dashboard/resumen` y `/api/v1/dashboard/mapa`; `/api/v1/dashboard/analitica` se resuelve de forma progresiva sin bloquear la vista principal. Los cambios de período, filtros operacionales, comparaciones y hallazgos se calculan en el backend seleccionado, no en el navegador. Resumen, mapa, analítica y detalle mantienen cachés con duraciones distintas; mover el mapa no repite la consulta de analítica.
+
+Para pruebas locales donde el navegador bloquee el puerto de la API, Vite admite un proxy opcional sin afectar producción:
+
+```bash
+VITE_API_BASE_URL=http://localhost:5173 \
+VITE_API_PROXY_TARGET=http://127.0.0.1:3001 \
+npm run dev
+```
 
 El centro de hallazgos combina señales territoriales, operacionales, de IA y de cuidado. Cada tarjeta puede aplicar su categoría o zona al resto del tablero. Los KPIs, la tendencia y la tabla territorial muestran la variación contra un período anterior de la misma duración.
 
@@ -118,10 +126,10 @@ Dashboard React
     ↓ HTTP
 API NestJS
     ↓ aggregation pipelines
-MongoDB Atlas
+Backend de datos
 ```
 
-El navegador nunca se conecta directamente a MongoDB Atlas. La API aplica validación, filtros, límites de consulta y, en la siguiente etapa, autenticación y permisos por municipalidad. El backend se encuentra en `../vitacura-dashboard-api`.
+El navegador nunca se conecta directamente a MongoDB Atlas ni a PostgreSQL. La API aplica validación, filtros y límites de consulta, y selecciona el motor mediante `DATA_BACKEND`. El backend se encuentra en `../vitacura-dashboard-api`.
 
 ## Privacidad
 

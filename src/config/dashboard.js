@@ -37,6 +37,6 @@ export const MAP_MODES = [
 
 export const MAP_STYLE_URL =
   import.meta.env.VITE_MAP_STYLE_URL ||
-  "https://tiles.openfreemap.org/styles/positron";
+  "https://tiles.openfreemap.org/styles/liberty";
 
 export const PRIORITY_ORDER = { P1: 0, P2: 1, P3: 2, P4: 3 };
