@@ -12,6 +12,23 @@ export default defineConfig({
     port: 4173,
   },
   build: {
-    sourcemap: true,
+    sourcemap: false,
+    cssCodeSplit: true,
+    chunkSizeWarningLimit: 1100,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+          if (id.includes("maplibre-gl")) return "map-engine";
+          if (id.includes("echarts") || id.includes("zrender")) {
+            return "chart-engine";
+          }
+          if (id.includes("react") || id.includes("scheduler")) {
+            return "react-runtime";
+          }
+          return undefined;
+        },
+      },
+    },
   },
 });

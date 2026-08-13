@@ -1,11 +1,15 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import maplibregl from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
 import { MAP_MODES, MAP_STYLE_URL } from "../config/dashboard.js";
 import {
   categoryInfo,
   formatCompact,
   formatNumber,
 } from "../utils/formatters.js";
+
+const EMPTY_FEATURE_COLLECTION = { type: "FeatureCollection", features: [] };
+const ZONE_COLORS = ["#dfe9f3", "#a9ded3", "#63c8ba", "#25a99a", "#0d5966"];
 
 function alertGeoJson(alerts) {
   return {
@@ -31,6 +35,60 @@ function alertGeoJson(alerts) {
   };
 }
 
+function selectedAlertGeoJson(alert) {
+  if (!alert) return EMPTY_FEATURE_COLLECTION;
+  return {
+    type: "FeatureCollection",
+    features: [
+      {
+        type: "Feature",
+        geometry: { type: "Point", coordinates: alert.coordenadas },
+        properties: { color: categoryInfo(alert.categoria).color },
+      },
+    ],
+  };
+}
+
+function quantile(values, percentile) {
+  if (!values.length) return 0;
+  return values[Math.min(values.length - 1, Math.floor((values.length - 1) * percentile))];
+}
+
+function buildZoneScale(zones) {
+  const values = zones.features
+    .map((feature) => Number(feature.properties.alertasPorMil) || 0)
+    .sort((a, b) => a - b);
+  const thresholds = [0.2, 0.4, 0.6, 0.8].map((percentile) =>
+    quantile(values, percentile),
+  );
+  const expression = [
+    "step",
+    ["coalesce", ["get", "alertasPorMil"], 0],
+    ZONE_COLORS[0],
+  ];
+  let previous = -Infinity;
+  thresholds.forEach((threshold, index) => {
+    if (threshold > previous) {
+      expression.push(threshold, ZONE_COLORS[index + 1]);
+      previous = threshold;
+    }
+  });
+  return {
+    expression,
+    minimum: values[0] ?? 0,
+    maximum: values.at(-1) ?? 0,
+  };
+}
+
+function applyZoneScale(map, zones) {
+  if (!map.getLayer("zonas-relleno")) return;
+  map.setPaintProperty(
+    "zonas-relleno",
+    "fill-color",
+    buildZoneScale(zones).expression,
+  );
+}
+
 function setModeVisibility(map, mode) {
   const visibility = (target) => (mode === target ? "visible" : "none");
   map.setLayoutProperty("calor-alertas", "visibility", visibility("calor"));
@@ -42,6 +100,7 @@ function setModeVisibility(map, mode) {
 
 function addDashboardLayers(map, alerts, zones) {
   const geoJson = alertGeoJson(alerts);
+  const zoneScale = buildZoneScale(zones);
 
   map.addSource("zonas-vitacura", { type: "geojson", data: zones });
   map.addSource("alertas-calor", { type: "geojson", data: geoJson });
@@ -52,26 +111,18 @@ function addDashboardLayers(map, alerts, zones) {
     clusterMaxZoom: 15,
     clusterRadius: 48,
   });
+  map.addSource("alerta-seleccion", {
+    type: "geojson",
+    data: EMPTY_FEATURE_COLLECTION,
+  });
 
   map.addLayer({
     id: "zonas-relleno",
     type: "fill",
     source: "zonas-vitacura",
     paint: {
-      "fill-color": [
-        "interpolate",
-        ["linear"],
-        ["get", "alertasPorMil"],
-        0,
-        "#dfe9f3",
-        300,
-        "#9bdacb",
-        800,
-        "#25a99a",
-        1600,
-        "#0d5966",
-      ],
-      "fill-opacity": 0.64,
+      "fill-color": zoneScale.expression,
+      "fill-opacity": 0.68,
     },
     layout: { visibility: "none" },
   });
@@ -83,7 +134,30 @@ function addDashboardLayers(map, alerts, zones) {
     paint: {
       "line-color": "#0b5260",
       "line-width": 1.5,
-      "line-opacity": 0.7,
+      "line-opacity": 0.72,
+    },
+  });
+
+  map.addLayer({
+    id: "zona-seleccion-relleno",
+    type: "fill",
+    source: "zonas-vitacura",
+    filter: ["==", ["get", "codigo"], "__sin_seleccion__"],
+    paint: {
+      "fill-color": "#39d4c5",
+      "fill-opacity": 0.2,
+    },
+  });
+
+  map.addLayer({
+    id: "zona-seleccion-borde",
+    type: "line",
+    source: "zonas-vitacura",
+    filter: ["==", ["get", "codigo"], "__sin_seleccion__"],
+    paint: {
+      "line-color": "#39d4c5",
+      "line-width": 4,
+      "line-opacity": 0.95,
     },
   });
 
@@ -98,7 +172,7 @@ function addDashboardLayers(map, alerts, zones) {
         ["linear"],
         ["get", "puntaje"],
         0,
-        0.15,
+        0.08,
         100,
         1,
       ],
@@ -107,27 +181,27 @@ function addDashboardLayers(map, alerts, zones) {
         ["linear"],
         ["zoom"],
         11,
-        0.55,
+        0.42,
         15,
-        1.7,
+        1.45,
       ],
       "heatmap-radius": [
         "interpolate",
         ["linear"],
         ["zoom"],
         11,
-        16,
+        13,
         15,
-        34,
+        29,
       ],
       "heatmap-opacity": [
         "interpolate",
         ["linear"],
         ["zoom"],
         14,
-        0.86,
+        0.8,
         16,
-        0.18,
+        0.15,
       ],
       "heatmap-color": [
         "interpolate",
@@ -135,11 +209,11 @@ function addDashboardLayers(map, alerts, zones) {
         ["heatmap-density"],
         0,
         "rgba(24, 182, 173, 0)",
-        0.2,
+        0.22,
         "#41d3bd",
-        0.45,
+        0.5,
         "#f8d35d",
-        0.7,
+        0.75,
         "#ff8a4c",
         1,
         "#ed3459",
@@ -211,6 +285,75 @@ function addDashboardLayers(map, alerts, zones) {
     },
     layout: { visibility: "none" },
   });
+
+  map.addLayer({
+    id: "alerta-seleccion-halo",
+    type: "circle",
+    source: "alerta-seleccion",
+    paint: {
+      "circle-radius": 16,
+      "circle-color": "rgba(255,255,255,.2)",
+      "circle-stroke-color": ["get", "color"],
+      "circle-stroke-width": 4,
+    },
+  });
+}
+
+function geometryBounds(geometry) {
+  const bounds = new maplibregl.LngLatBounds();
+  const visit = (coordinates) => {
+    if (
+      Array.isArray(coordinates) &&
+      coordinates.length >= 2 &&
+      Number.isFinite(coordinates[0]) &&
+      Number.isFinite(coordinates[1])
+    ) {
+      bounds.extend(coordinates);
+      return;
+    }
+    coordinates.forEach(visit);
+  };
+  visit(geometry.coordinates);
+  return bounds;
+}
+
+function featureCollectionBounds(collection) {
+  const bounds = new maplibregl.LngLatBounds();
+  collection.features.forEach((feature) => {
+    const featureBounds = geometryBounds(feature.geometry);
+    bounds.extend(featureBounds.getSouthWest());
+    bounds.extend(featureBounds.getNorthEast());
+  });
+  return bounds;
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function zonePopupHtml(properties) {
+  const dominant = properties.categoriaDominante
+    ? categoryInfo(properties.categoriaDominante).label
+    : "Sin actividad";
+  return `
+    <div class="zone-popup">
+      <span>${escapeHtml(properties.codigo)}</span>
+      <strong>${escapeHtml(properties.nombre)}</strong>
+      <dl>
+        <div><dt>Alertas</dt><dd>${formatNumber.format(Number(properties.alertas) || 0)}</dd></div>
+        <div><dt>Por 1.000</dt><dd>${formatNumber.format(Number(properties.alertasPorMil) || 0)}</dd></div>
+        <div><dt>Críticas</dt><dd>${formatNumber.format(Number(properties.criticas) || 0)}</dd></div>
+        <div><dt>Respuesta</dt><dd>${Math.round(Number(properties.respuestaMediana) || 0)} s</dd></div>
+        <div><dt>SLA</dt><dd>${Math.round(Number(properties.sla) || 0)}%</dd></div>
+        <div><dt>Predomina</dt><dd>${escapeHtml(dominant)}</dd></div>
+      </dl>
+      <small>Selecciona la zona para analizarla</small>
+    </div>`;
 }
 
 export default function DashboardMap({
@@ -218,8 +361,12 @@ export default function DashboardMap({
   zones,
   mapInfo,
   mode,
+  selectedAlert,
+  selectedZone,
   onModeChange,
   onSelectAlert,
+  onSelectZone,
+  onBoundsChange,
 }) {
   const mapElementRef = useRef(null);
   const mapRef = useRef(null);
@@ -227,6 +374,13 @@ export default function DashboardMap({
   const alertsRef = useRef(alerts);
   const zonesRef = useRef(zones);
   const modeRef = useRef(mode);
+  const selectAlertRef = useRef(onSelectAlert);
+  const selectZoneRef = useRef(onSelectZone);
+  const boundsChangeRef = useRef(onBoundsChange);
+  const boundsTimerRef = useRef(null);
+  const lastSelectedAlertRef = useRef(null);
+  const lastFittedZoneRef = useRef(null);
+  const zoneScale = useMemo(() => buildZoneScale(zones), [zones]);
 
   useEffect(() => {
     alertsRef.current = alerts;
@@ -239,6 +393,18 @@ export default function DashboardMap({
   useEffect(() => {
     modeRef.current = mode;
   }, [mode]);
+
+  useEffect(() => {
+    selectAlertRef.current = onSelectAlert;
+  }, [onSelectAlert]);
+
+  useEffect(() => {
+    selectZoneRef.current = onSelectZone;
+  }, [onSelectZone]);
+
+  useEffect(() => {
+    boundsChangeRef.current = onBoundsChange;
+  }, [onBoundsChange]);
 
   useEffect(() => {
     if (!mapElementRef.current || mapRef.current) return undefined;
@@ -262,10 +428,24 @@ export default function DashboardMap({
       "bottom-left",
     );
 
+    const notifyBounds = () => {
+      clearTimeout(boundsTimerRef.current);
+      boundsTimerRef.current = setTimeout(() => {
+        const bounds = map.getBounds();
+        boundsChangeRef.current?.([
+          bounds.getWest(),
+          bounds.getSouth(),
+          bounds.getEast(),
+          bounds.getNorth(),
+        ]);
+      }, 450);
+    };
+
     map.on("load", () => {
       loadedRef.current = true;
       addDashboardLayers(map, alertsRef.current, zonesRef.current);
       setModeVisibility(map, modeRef.current);
+      notifyBounds();
 
       map.on("click", "grupos-circulo", async (event) => {
         const feature = event.features?.[0];
@@ -283,19 +463,16 @@ export default function DashboardMap({
         const selected = alertsRef.current.find(
           (alert) => alert.id === feature.properties.id,
         );
-        if (selected) onSelectAlert(selected);
+        if (selected) selectAlertRef.current?.(selected);
       });
 
       map.on("click", "zonas-relleno", (event) => {
         const feature = event.features?.[0];
         if (!feature) return;
-        new maplibregl.Popup({ closeButton: false, offset: 8 })
+        selectZoneRef.current?.(feature.properties.codigo);
+        new maplibregl.Popup({ closeButton: true, offset: 8 })
           .setLngLat(event.lngLat)
-          .setHTML(
-            `<strong>${feature.properties.nombre}</strong><br>` +
-              `${formatNumber.format(feature.properties.alertas)} alertas · ` +
-              `${formatNumber.format(feature.properties.alertasPorMil)} por mil usuarios`,
-          )
+          .setHTML(zonePopupHtml(feature.properties))
           .addTo(map);
       });
 
@@ -310,14 +487,16 @@ export default function DashboardMap({
         },
       );
     });
+    map.on("moveend", notifyBounds);
 
     mapRef.current = map;
     return () => {
+      clearTimeout(boundsTimerRef.current);
       map.remove();
       mapRef.current = null;
       loadedRef.current = false;
     };
-  }, [onSelectAlert]);
+  }, []);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -331,6 +510,7 @@ export default function DashboardMap({
     const map = mapRef.current;
     if (!map || !loadedRef.current) return;
     map.getSource("zonas-vitacura")?.setData(zones);
+    applyZoneScale(map, zones);
   }, [zones]);
 
   useEffect(() => {
@@ -339,6 +519,56 @@ export default function DashboardMap({
     setModeVisibility(map, mode);
   }, [mode]);
 
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loadedRef.current) return;
+    const filter = [
+      "==",
+      ["get", "codigo"],
+      selectedZone ?? "__sin_seleccion__",
+    ];
+    map.setFilter("zona-seleccion-relleno", filter);
+    map.setFilter("zona-seleccion-borde", filter);
+    if (selectedZone && lastFittedZoneRef.current !== selectedZone) {
+      const feature = zones.features.find(
+        (item) => item.properties.codigo === selectedZone,
+      );
+      if (feature) {
+        map.fitBounds(geometryBounds(feature.geometry), {
+          padding: 58,
+          maxZoom: 14.2,
+          duration: 700,
+        });
+      }
+    } else if (!selectedZone && lastFittedZoneRef.current) {
+      map.fitBounds(featureCollectionBounds(zones), {
+        padding: 42,
+        maxZoom: 13,
+        duration: 700,
+      });
+    }
+    lastFittedZoneRef.current = selectedZone;
+  }, [selectedZone, zones]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loadedRef.current) return;
+    map.getSource("alerta-seleccion")?.setData(
+      selectedAlertGeoJson(selectedAlert),
+    );
+    if (
+      selectedAlert &&
+      lastSelectedAlertRef.current !== selectedAlert.id
+    ) {
+      map.easeTo({
+        center: selectedAlert.coordenadas,
+        zoom: Math.max(map.getZoom(), 15.3),
+        duration: 650,
+      });
+    }
+    lastSelectedAlertRef.current = selectedAlert?.id ?? null;
+  }, [selectedAlert]);
+
   return (
     <section className="map-card" id="mapa">
       <div className="section-heading map-heading">
@@ -346,17 +576,28 @@ export default function DashboardMap({
           <span className="eyebrow">Inteligencia territorial</span>
           <h2>Mapa de alertas</h2>
         </div>
-        <div className="segmented" aria-label="Visualización del mapa">
-          {MAP_MODES.map((item) => (
+        <div className="map-heading-actions">
+          {selectedZone && (
             <button
-              key={item.value}
-              className={mode === item.value ? "selected" : ""}
-              onClick={() => onModeChange(item.value)}
               type="button"
+              className="selected-zone-chip"
+              onClick={() => onSelectZone(selectedZone)}
             >
-              {item.label}
+              Zona {selectedZone} <span>×</span>
             </button>
-          ))}
+          )}
+          <div className="segmented" aria-label="Visualización del mapa">
+            {MAP_MODES.map((item) => (
+              <button
+                key={item.value}
+                className={mode === item.value ? "selected" : ""}
+                onClick={() => onModeChange(item.value)}
+                type="button"
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
       <div className="map-wrap">
@@ -377,8 +618,16 @@ export default function DashboardMap({
             }
           />
           <div className="legend-scale">
-            <span>Baja</span>
-            <span>Alta</span>
+            <span>
+              {mode === "zonas"
+                ? formatCompact.format(zoneScale.minimum)
+                : "Baja"}
+            </span>
+            <span>
+              {mode === "zonas"
+                ? formatCompact.format(zoneScale.maximum)
+                : "Alta"}
+            </span>
           </div>
         </div>
         <div className="map-counter">
@@ -386,7 +635,7 @@ export default function DashboardMap({
           <span>
             {mapInfo?.truncado
               ? `de ${formatCompact.format(mapInfo.total)} eventos`
-              : "eventos visibles"}
+              : "eventos en el área visible"}
           </span>
         </div>
         {mapInfo?.truncado && (

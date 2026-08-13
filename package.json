@@ -9,7 +9,11 @@
     "preview": "vite preview",
     "data:build": "node build-data.mjs",
     "data:audit": "node auditar-dashboard.mjs",
-    "check": "npm run data:audit && npm run build"
+    "data:verify": "node scripts/verify-scenarios.mjs",
+    "data:export-mongo": "node scripts/export-mongo-scenario.mjs",
+    "data:verify-mongo": "node scripts/verify-mongo-export.mjs",
+    "performance:verify": "node scripts/verify-bundle.mjs",
+    "check": "npm run data:audit && npm run data:verify && npm run build && npm run performance:verify"
   },
   "dependencies": {
     "echarts": "^6.0.0",
