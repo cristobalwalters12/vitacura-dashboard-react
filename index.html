@@ -3,13 +3,35 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#07111f" />
+    <meta name="theme-color" content="#0A0C0F" />
     <meta
       name="description"
       content="Tablero comunitario de alertas y cuidado para Vitacura"
     />
     <link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin />
     <link rel="dns-prefetch" href="https://tiles.openfreemap.org" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      (() => {
+        const saved = localStorage.getItem("lyngus-halo-theme");
+        const theme =
+          saved === "light" || saved === "dark"
+            ? saved
+            : matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light";
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.style.colorScheme = theme;
+        document
+          .querySelector('meta[name="theme-color"]')
+          .setAttribute("content", theme === "dark" ? "#0A0C0F" : "#FFFFFF");
+      })();
+    </script>
     <title>Vitacura Comunidad Segura</title>
   </head>
   <body>

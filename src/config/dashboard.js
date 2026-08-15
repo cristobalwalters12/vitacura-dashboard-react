@@ -1,17 +1,23 @@
 export const CATEGORY = {
-  medica: { label: "Médica", color: "#ef5b67" },
-  seguridad: { label: "Seguridad", color: "#ffb84d" },
-  incendio: { label: "Incendio", color: "#ff775c" },
-  accidente: { label: "Accidente", color: "#9d8cff" },
+  medica: { label: "Médica", color: "#BA1A1A", darkColor: "#FFB4AB" },
+  seguridad: { label: "Seguridad", color: "#F59E0B", darkColor: "#FBBF24" },
+  incendio: { label: "Incendio", color: "#C2410C", darkColor: "#FF9D66" },
+  accidente: { label: "Accidente", color: "#6750A4", darkColor: "#C4B5FD" },
   asistencia_cuidador: {
     label: "Asistencia cuidador",
-    color: "#39d4c5",
+    color: "#006970",
+    darkColor: "#00EEFC",
   },
   asistencia_comunitaria: {
     label: "Asistencia comunitaria",
-    color: "#6fd08c",
+    color: "#10B981",
+    darkColor: "#34D399",
   },
-  sin_clasificar: { label: "Sin clasificar", color: "#94a3b8" },
+  sin_clasificar: {
+    label: "Sin clasificar",
+    color: "#45464D",
+    darkColor: "#C0C4CC",
+  },
 };
 
 export const SEVERITY = {
