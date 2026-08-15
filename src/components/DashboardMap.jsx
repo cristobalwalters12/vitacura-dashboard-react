@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { MAP_MODES, MAP_STYLE_URL } from "../config/dashboard.js";
+import { getThemePalette } from "../config/theme.js";
 import {
   categoryInfo,
   formatCompact,
@@ -9,9 +10,12 @@ import {
 } from "../utils/formatters.js";
 
 const EMPTY_FEATURE_COLLECTION = { type: "FeatureCollection", features: [] };
-const ZONE_COLORS = ["#dfe9f3", "#a9ded3", "#63c8ba", "#25a99a", "#0d5966"];
+const ZONE_COLORS = {
+  light: ["#E0E3E5", "#B8DDE0", "#7DF4FF", "#2AA5AC", "#006970"],
+  dark: ["#1E2428", "#164B4F", "#006970", "#00AAB5", "#00EEFC"],
+};
 
-function alertGeoJson(alerts) {
+function alertGeoJson(alerts, theme) {
   return {
     type: "FeatureCollection",
     features: alerts.map((alert) => ({
@@ -22,8 +26,8 @@ function alertGeoJson(alerts) {
         id: alert.id,
         codigo: alert.codigo,
         categoria: alert.categoria,
-        categoriaLabel: categoryInfo(alert.categoria).label,
-        color: categoryInfo(alert.categoria).color,
+        categoriaLabel: categoryInfo(alert.categoria, theme).label,
+        color: categoryInfo(alert.categoria, theme).color,
         severidad: alert.severidad,
         prioridad: alert.prioridad,
         puntaje: alert.puntajePrioridad,
@@ -35,7 +39,7 @@ function alertGeoJson(alerts) {
   };
 }
 
-function selectedAlertGeoJson(alert) {
+function selectedAlertGeoJson(alert, theme) {
   if (!alert) return EMPTY_FEATURE_COLLECTION;
   return {
     type: "FeatureCollection",
@@ -43,7 +47,7 @@ function selectedAlertGeoJson(alert) {
       {
         type: "Feature",
         geometry: { type: "Point", coordinates: alert.coordenadas },
-        properties: { color: categoryInfo(alert.categoria).color },
+        properties: { color: categoryInfo(alert.categoria, theme).color },
       },
     ],
   };
@@ -54,7 +58,8 @@ function quantile(values, percentile) {
   return values[Math.min(values.length - 1, Math.floor((values.length - 1) * percentile))];
 }
 
-function buildZoneScale(zones) {
+function buildZoneScale(zones, theme) {
+  const zoneColors = ZONE_COLORS[theme] ?? ZONE_COLORS.dark;
   const values = zones.features
     .map((feature) => Number(feature.properties.alertasPorMil) || 0)
     .sort((a, b) => a - b);
@@ -64,12 +69,12 @@ function buildZoneScale(zones) {
   const expression = [
     "step",
     ["coalesce", ["get", "alertasPorMil"], 0],
-    ZONE_COLORS[0],
+    zoneColors[0],
   ];
   let previous = -Infinity;
   thresholds.forEach((threshold, index) => {
     if (threshold > previous) {
-      expression.push(threshold, ZONE_COLORS[index + 1]);
+      expression.push(threshold, zoneColors[index + 1]);
       previous = threshold;
     }
   });
@@ -80,12 +85,12 @@ function buildZoneScale(zones) {
   };
 }
 
-function applyZoneScale(map, zones) {
+function applyZoneScale(map, zones, theme) {
   if (!map.getLayer("zonas-relleno")) return;
   map.setPaintProperty(
     "zonas-relleno",
     "fill-color",
-    buildZoneScale(zones).expression,
+    buildZoneScale(zones, theme).expression,
   );
 }
 
@@ -98,9 +103,10 @@ function setModeVisibility(map, mode) {
   map.setLayoutProperty("zonas-relleno", "visibility", visibility("zonas"));
 }
 
-function addDashboardLayers(map, alerts, zones) {
-  const geoJson = alertGeoJson(alerts);
-  const zoneScale = buildZoneScale(zones);
+function addDashboardLayers(map, alerts, zones, theme) {
+  const palette = getThemePalette(theme);
+  const geoJson = alertGeoJson(alerts, theme);
+  const zoneScale = buildZoneScale(zones, theme);
 
   map.addSource("zonas-vitacura", { type: "geojson", data: zones });
   map.addSource("alertas-calor", { type: "geojson", data: geoJson });
@@ -132,7 +138,7 @@ function addDashboardLayers(map, alerts, zones) {
     type: "line",
     source: "zonas-vitacura",
     paint: {
-      "line-color": "#0b5260",
+      "line-color": palette.secondary,
       "line-width": 1.5,
       "line-opacity": 0.72,
     },
@@ -144,7 +150,7 @@ function addDashboardLayers(map, alerts, zones) {
     source: "zonas-vitacura",
     filter: ["==", ["get", "codigo"], "__sin_seleccion__"],
     paint: {
-      "fill-color": "#39d4c5",
+      "fill-color": palette.secondary,
       "fill-opacity": 0.2,
     },
   });
@@ -155,7 +161,7 @@ function addDashboardLayers(map, alerts, zones) {
     source: "zonas-vitacura",
     filter: ["==", ["get", "codigo"], "__sin_seleccion__"],
     paint: {
-      "line-color": "#39d4c5",
+      "line-color": palette.secondary,
       "line-width": 4,
       "line-opacity": 0.95,
     },
@@ -208,15 +214,15 @@ function addDashboardLayers(map, alerts, zones) {
         ["linear"],
         ["heatmap-density"],
         0,
-        "rgba(24, 182, 173, 0)",
+        palette.secondaryFade,
         0.22,
-        "#41d3bd",
+        palette.secondary,
         0.5,
-        "#f8d35d",
+        palette.warning,
         0.75,
-        "#ff8a4c",
+        "#F97316",
         1,
-        "#ed3459",
+        palette.error,
       ],
     },
   });
@@ -230,11 +236,11 @@ function addDashboardLayers(map, alerts, zones) {
       "circle-color": [
         "step",
         ["get", "point_count"],
-        "#39d4c5",
+        palette.secondary,
         30,
-        "#ffb84d",
+        palette.warning,
         100,
-        "#ef5b67",
+        palette.error,
       ],
       "circle-radius": [
         "step",
@@ -246,7 +252,7 @@ function addDashboardLayers(map, alerts, zones) {
         31,
       ],
       "circle-stroke-width": 3,
-      "circle-stroke-color": "rgba(255,255,255,.8)",
+      "circle-stroke-color": palette.surface,
     },
     layout: { visibility: "none" },
   });
@@ -261,7 +267,7 @@ function addDashboardLayers(map, alerts, zones) {
       "text-size": 12,
       visibility: "none",
     },
-    paint: { "text-color": "#08111f" },
+    paint: { "text-color": palette.onSecondary },
   });
 
   map.addLayer({
@@ -280,7 +286,7 @@ function addDashboardLayers(map, alerts, zones) {
         100,
         9,
       ],
-      "circle-stroke-color": "#ffffff",
+      "circle-stroke-color": palette.surface,
       "circle-stroke-width": 1.5,
     },
     layout: { visibility: "none" },
@@ -292,7 +298,7 @@ function addDashboardLayers(map, alerts, zones) {
     source: "alerta-seleccion",
     paint: {
       "circle-radius": 16,
-      "circle-color": "rgba(255,255,255,.2)",
+      "circle-color": palette.secondaryAlpha,
       "circle-stroke-color": ["get", "color"],
       "circle-stroke-width": 4,
     },
@@ -357,6 +363,7 @@ function zonePopupHtml(properties) {
 }
 
 export default function DashboardMap({
+  theme,
   alerts,
   zones,
   mapInfo,
@@ -374,13 +381,14 @@ export default function DashboardMap({
   const alertsRef = useRef(alerts);
   const zonesRef = useRef(zones);
   const modeRef = useRef(mode);
+  const themeRef = useRef(theme);
   const selectAlertRef = useRef(onSelectAlert);
   const selectZoneRef = useRef(onSelectZone);
   const boundsChangeRef = useRef(onBoundsChange);
   const boundsTimerRef = useRef(null);
   const lastSelectedAlertRef = useRef(null);
   const lastFittedZoneRef = useRef(null);
-  const zoneScale = useMemo(() => buildZoneScale(zones), [zones]);
+  const zoneScale = useMemo(() => buildZoneScale(zones, theme), [theme, zones]);
 
   useEffect(() => {
     alertsRef.current = alerts;
@@ -393,6 +401,10 @@ export default function DashboardMap({
   useEffect(() => {
     modeRef.current = mode;
   }, [mode]);
+
+  useEffect(() => {
+    themeRef.current = theme;
+  }, [theme]);
 
   useEffect(() => {
     selectAlertRef.current = onSelectAlert;
@@ -443,7 +455,12 @@ export default function DashboardMap({
 
     map.on("load", () => {
       loadedRef.current = true;
-      addDashboardLayers(map, alertsRef.current, zonesRef.current);
+      addDashboardLayers(
+        map,
+        alertsRef.current,
+        zonesRef.current,
+        themeRef.current,
+      );
       setModeVisibility(map, modeRef.current);
       notifyBounds();
 
@@ -501,17 +518,75 @@ export default function DashboardMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !loadedRef.current) return;
-    const geoJson = alertGeoJson(alerts);
+    const geoJson = alertGeoJson(alerts, theme);
     map.getSource("alertas-calor")?.setData(geoJson);
     map.getSource("alertas-grupos")?.setData(geoJson);
-  }, [alerts]);
+  }, [alerts, theme]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !loadedRef.current) return;
     map.getSource("zonas-vitacura")?.setData(zones);
-    applyZoneScale(map, zones);
-  }, [zones]);
+    applyZoneScale(map, zones, theme);
+  }, [theme, zones]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loadedRef.current) return;
+    const palette = getThemePalette(theme);
+    applyZoneScale(map, zonesRef.current, theme);
+    map.setPaintProperty("zonas-borde", "line-color", palette.secondary);
+    map.setPaintProperty("calor-alertas", "heatmap-color", [
+      "interpolate",
+      ["linear"],
+      ["heatmap-density"],
+      0,
+      palette.secondaryFade,
+      0.22,
+      palette.secondary,
+      0.5,
+      palette.warning,
+      0.75,
+      "#F97316",
+      1,
+      palette.error,
+    ]);
+    map.setPaintProperty(
+      "zona-seleccion-relleno",
+      "fill-color",
+      palette.secondary,
+    );
+    map.setPaintProperty(
+      "zona-seleccion-borde",
+      "line-color",
+      palette.secondary,
+    );
+    map.setPaintProperty("grupos-circulo", "circle-color", [
+      "step",
+      ["get", "point_count"],
+      palette.secondary,
+      30,
+      palette.warning,
+      100,
+      palette.error,
+    ]);
+    map.setPaintProperty(
+      "grupos-circulo",
+      "circle-stroke-color",
+      palette.surface,
+    );
+    map.setPaintProperty("grupos-texto", "text-color", palette.onSecondary);
+    map.setPaintProperty(
+      "alertas-punto",
+      "circle-stroke-color",
+      palette.surface,
+    );
+    map.setPaintProperty(
+      "alerta-seleccion-halo",
+      "circle-color",
+      palette.secondaryAlpha,
+    );
+  }, [theme]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -554,7 +629,7 @@ export default function DashboardMap({
     const map = mapRef.current;
     if (!map || !loadedRef.current) return;
     map.getSource("alerta-seleccion")?.setData(
-      selectedAlertGeoJson(selectedAlert),
+      selectedAlertGeoJson(selectedAlert, theme),
     );
     if (
       selectedAlert &&
@@ -567,7 +642,7 @@ export default function DashboardMap({
       });
     }
     lastSelectedAlertRef.current = selectedAlert?.id ?? null;
-  }, [selectedAlert]);
+  }, [selectedAlert, theme]);
 
   return (
     <section className="map-card" id="mapa">

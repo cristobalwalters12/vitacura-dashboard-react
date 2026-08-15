@@ -15,8 +15,10 @@ import {
   PERIODS,
   PRIORITY_ORDER,
 } from "./config/dashboard.js";
+import { getThemePalette } from "./config/theme.js";
 import { useDashboardData } from "./hooks/useDashboardData.js";
 import { useAlertDetail } from "./hooks/useAlertDetail.js";
+import { useTheme } from "./hooks/useTheme.js";
 import {
   alertInBounds,
   alertMatchesFilters,
@@ -186,6 +188,7 @@ function buildZoneGeoJson(data, filteredAlerts) {
 
 function Dashboard({
   data,
+  theme,
   source,
   refreshing,
   staleError,
@@ -198,6 +201,7 @@ function Dashboard({
   onFiltersChange,
   onClearOperationalFilters,
   onBoundsChange,
+  onThemeToggle,
 }) {
   const activeSection = useActiveSection();
   const [mode, setMode] = useState("calor");
@@ -209,6 +213,7 @@ function Dashboard({
     retry: retryAlertDetail,
   } = useAlertDetail(selectedAlert);
   const comparison = data.comparacionServidor;
+  const palette = getThemePalette(theme);
   const insights = useMemo(() => {
     const combined = [
       ...(data.hallazgosServidor ?? []),
@@ -449,18 +454,18 @@ function Dashboard({
         boundaryGap: false,
         data: trend.map((item) => item.date),
         axisLabel: {
-          color: "#7f91a8",
+          color: palette.onSurfaceVariant,
           hideOverlap: true,
           formatter: (value) => value.slice(5),
         },
-        axisLine: { lineStyle: { color: "#23354b" } },
+        axisLine: { lineStyle: { color: palette.outline } },
       },
       yAxis: {
         type: "value",
         name: "Alertas / día",
-        nameTextStyle: { color: "#7f91a8" },
-        axisLabel: { color: "#7f91a8" },
-        splitLine: { lineStyle: { color: "rgba(127,145,168,.13)" } },
+        nameTextStyle: { color: palette.onSurfaceVariant },
+        axisLabel: { color: palette.onSurfaceVariant },
+        splitLine: { lineStyle: { color: palette.grid } },
       },
       series: [
         {
@@ -469,7 +474,7 @@ function Dashboard({
           data: trend.map((item) => item.total),
           symbol: "none",
           smooth: 0.28,
-          lineStyle: { color: "#39d4c5", width: 2.4 },
+          lineStyle: { color: palette.secondary, width: 2.4 },
           areaStyle: {
             color: {
               type: "linear",
@@ -478,8 +483,8 @@ function Dashboard({
               x2: 0,
               y2: 1,
               colorStops: [
-                { offset: 0, color: "rgba(57,212,197,.35)" },
-                { offset: 1, color: "rgba(57,212,197,0)" },
+                { offset: 0, color: palette.secondaryAlpha },
+                { offset: 1, color: palette.secondaryFade },
               ],
             },
           },
@@ -493,7 +498,7 @@ function Dashboard({
                 symbol: "none",
                 smooth: 0.28,
                 lineStyle: {
-                  color: "rgba(154,171,192,.72)",
+                  color: palette.onSurfaceVariant,
                   width: 1.5,
                   type: "dashed",
                 },
@@ -502,7 +507,7 @@ function Dashboard({
           : []),
       ],
     }),
-    [comparison, trend],
+    [comparison, palette, trend],
   );
 
   const categoryOption = useMemo(
@@ -514,10 +519,13 @@ function Dashboard({
       legend: {
         bottom: 0,
         left: "center",
-        textStyle: { color: "#9aabc0" },
+        textStyle: {
+          color: palette.onSurfaceVariant,
+          fontFamily: '"Space Grotesk", ui-sans-serif, sans-serif',
+        },
         itemWidth: 10,
         itemHeight: 10,
-        formatter: (name) => categoryInfo(name).label,
+        formatter: (name) => categoryInfo(name, theme).label,
       },
       series: [
         {
@@ -525,24 +533,24 @@ function Dashboard({
           radius: ["47%", "70%"],
           center: ["50%", "42%"],
           avoidLabelOverlap: true,
-          itemStyle: { borderColor: "#0d1a2b", borderWidth: 3 },
+          itemStyle: { borderColor: palette.surface, borderWidth: 3 },
           label: { show: false },
           emphasis: {
             label: {
               show: true,
               formatter: "{d}%",
-              color: "#f4f8fb",
+              color: palette.onSurface,
               fontSize: 16,
             },
           },
           data: categories.map((item) => ({
             ...item,
-            itemStyle: { color: categoryInfo(item.name).color },
+            itemStyle: { color: categoryInfo(item.name, theme).color },
           })),
         },
       ],
     }),
-    [categories],
+    [categories, palette, theme],
   );
 
   return (
@@ -630,6 +638,16 @@ function Dashboard({
             <h1>Panorama comunitario</h1>
           </div>
           <div className="topbar-meta">
+            <button
+              type="button"
+              className="theme-toggle"
+              onClick={onThemeToggle}
+              aria-label={`Cambiar a modo ${theme === "dark" ? "claro" : "oscuro"}`}
+              title={`Cambiar a modo ${theme === "dark" ? "claro" : "oscuro"}`}
+            >
+              <span aria-hidden="true">{theme === "dark" ? "☀" : "☾"}</span>
+              <span>{theme === "dark" ? "Modo claro" : "Modo oscuro"}</span>
+            </button>
             <span
               className={`live-badge ${refreshing ? "syncing" : ""}`}
               aria-live="polite"
@@ -781,6 +799,7 @@ function Dashboard({
             rootMargin="600px 0px"
           >
             <DashboardMap
+              theme={theme}
               alerts={visibleAlerts}
               zones={filteredZones}
               mapInfo={mapInfo}
@@ -807,7 +826,7 @@ function Dashboard({
                 </div>
               )}
               {priorityAlerts.map((alert) => {
-                const info = categoryInfo(alert.categoria);
+                const info = categoryInfo(alert.categoria, theme);
                 return (
                   <button
                     key={alert.id}
@@ -919,7 +938,10 @@ function Dashboard({
               minHeight={510}
               label="recorrido operacional"
             >
-              <OperationalJourney analytics={data.analiticaServidor} />
+              <OperationalJourney
+                analytics={data.analiticaServidor}
+                theme={theme}
+              />
             </DeferredModule>
             <DeferredModule
               id="ia"
@@ -931,8 +953,11 @@ function Dashboard({
                 className="advanced-analytics-grid"
                 aria-label="Analítica avanzada de inteligencia artificial y cuidado"
               >
-                <AiAnalytics analytics={data.analiticaServidor} />
-                <CareAnalytics analytics={data.analiticaServidor} />
+                <AiAnalytics analytics={data.analiticaServidor} theme={theme} />
+                <CareAnalytics
+                  analytics={data.analiticaServidor}
+                  theme={theme}
+                />
               </section>
             </DeferredModule>
           </>
@@ -1028,6 +1053,7 @@ function Dashboard({
       {selectedAlert && (
         <Suspense fallback={<DetailModuleFallback />}>
           <AlertDetail
+            theme={theme}
             alert={selectedAlert}
             detail={selectedAlertDetail}
             loading={alertDetailLoading}
@@ -1043,6 +1069,7 @@ function Dashboard({
 }
 
 export default function App() {
+  const { theme, toggleTheme } = useTheme();
   const [filters, setFilters] = useState({
     dias: 90,
     categoria: "todas",
@@ -1108,6 +1135,7 @@ export default function App() {
   return (
     <Dashboard
       data={data}
+      theme={theme}
       source={source}
       refreshing={loading}
       staleError={error}
@@ -1120,6 +1148,7 @@ export default function App() {
       onFiltersChange={updateFilters}
       onClearOperationalFilters={clearOperationalFilters}
       onBoundsChange={updateBounds}
+      onThemeToggle={toggleTheme}
     />
   );
 }

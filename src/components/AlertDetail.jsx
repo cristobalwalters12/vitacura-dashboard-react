@@ -102,6 +102,7 @@ function DetailSkeleton() {
 }
 
 export default function AlertDetail({
+  theme,
   alert,
   detail,
   loading,
@@ -159,6 +160,7 @@ export default function AlertDetail({
   const identification = detail?.identificacion;
   const category = categoryInfo(
     classification?.categoria ?? alert.categoria,
+    theme,
   );
   const severity = classification?.severidad ?? alert.severidad;
   const priority = detail?.prioridad ?? {

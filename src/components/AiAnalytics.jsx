@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import EChart from "./EChart.jsx";
 import { categoryInfo } from "../utils/formatters.js";
+import { getThemePalette } from "../config/theme.js";
 
 const numberFormat = new Intl.NumberFormat("es-CL");
 
@@ -16,7 +17,8 @@ function confidenceLabel(value) {
   return labels[value] ?? `${Math.round(Number(value) * 100)}%`;
 }
 
-export default function AiAnalytics({ analytics }) {
+export default function AiAnalytics({ analytics, theme }) {
+  const palette = getThemePalette(theme);
   const ai = analytics?.ia;
   const summary = ai?.resumen ?? {};
   const categories = ai?.categorias ?? [];
@@ -40,16 +42,16 @@ export default function AiAnalytics({ analytics }) {
         type: "value",
         max: 1,
         axisLabel: {
-          color: "#71859c",
+          color: palette.onSurfaceVariant,
           fontSize: 9,
           formatter: (value) => `${Math.round(value * 100)}%`,
         },
-        splitLine: { lineStyle: { color: "rgba(127,145,168,.1)" } },
+        splitLine: { lineStyle: { color: palette.grid } },
       },
       yAxis: {
         type: "category",
         data: selected.map((item) => categoryInfo(item.categoria).label),
-        axisLabel: { color: "#9fb0c3", fontSize: 8.5 },
+        axisLabel: { color: palette.onSurfaceVariant, fontSize: 8.5 },
         axisLine: { show: false },
         axisTick: { show: false },
       },
@@ -61,8 +63,8 @@ export default function AiAnalytics({ analytics }) {
             itemStyle: {
               color:
                 item.tasa_revision >= 0.5
-                  ? "#ffb84d"
-                  : "rgba(157,140,255,.82)",
+                  ? palette.warning
+                  : palette.dataViolet,
               borderRadius: [0, 5, 5, 0],
             },
           })),
@@ -70,7 +72,7 @@ export default function AiAnalytics({ analytics }) {
         },
       ],
     };
-  }, [categories]);
+  }, [categories, palette]);
 
   if (!ai) return null;
 

@@ -23,13 +23,16 @@ export function median(values) {
     : (sorted[middle - 1] + sorted[middle]) / 2;
 }
 
-export function categoryInfo(category) {
-  return (
-    CATEGORY[category] ?? {
-      label: category.replaceAll("_", " "),
-      color: "#94a3b8",
-    }
-  );
+export function categoryInfo(category, theme = "light") {
+  const item = CATEGORY[category] ?? {
+    label: category.replaceAll("_", " "),
+    color: "#45464D",
+    darkColor: "#C0C4CC",
+  };
+  return {
+    ...item,
+    color: theme === "dark" ? item.darkColor : item.color,
+  };
 }
 
 export function humanize(value, fallback = "Sin registro") {

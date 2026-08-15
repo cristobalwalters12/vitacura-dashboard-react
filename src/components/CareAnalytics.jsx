@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import EChart from "./EChart.jsx";
+import { getThemePalette } from "../config/theme.js";
 
 const numberFormat = new Intl.NumberFormat("es-CL");
 
@@ -20,7 +21,8 @@ const RISK_LABELS = {
   movilidad_reducida: "Movilidad reducida",
 };
 
-export default function CareAnalytics({ analytics }) {
+export default function CareAnalytics({ analytics, theme }) {
+  const palette = getThemePalette(theme);
   const care = analytics?.cuidado;
   const summary = care?.resumen ?? {};
   const devices = care?.dispositivos ?? {};
@@ -49,18 +51,18 @@ export default function CareAnalytics({ analytics }) {
         type: "category",
         data: hours.map((item) => String(item.hora).padStart(2, "0")),
         axisLabel: {
-          color: "#71859c",
+          color: palette.onSurfaceVariant,
           fontSize: 8,
           interval: 3,
           formatter: (value) => `${value}h`,
         },
-        axisLine: { lineStyle: { color: "rgba(127,145,168,.16)" } },
+        axisLine: { lineStyle: { color: palette.grid } },
         axisTick: { show: false },
       },
       yAxis: {
         type: "value",
-        axisLabel: { color: "#71859c", fontSize: 8 },
-        splitLine: { lineStyle: { color: "rgba(127,145,168,.1)" } },
+        axisLabel: { color: palette.onSurfaceVariant, fontSize: 8 },
+        splitLine: { lineStyle: { color: palette.grid } },
       },
       series: [
         {
@@ -69,14 +71,15 @@ export default function CareAnalytics({ analytics }) {
           data: hours.map((item) => ({
             value: item.total,
             itemStyle: {
-              color: item.total === peak ? "#ffb84d" : "#39d4c5",
+              color:
+                item.total === peak ? palette.warning : palette.secondary,
               borderRadius: [4, 4, 0, 0],
             },
           })),
         },
       ],
     };
-  }, [demand]);
+  }, [demand, palette]);
 
   if (!care) return null;
 

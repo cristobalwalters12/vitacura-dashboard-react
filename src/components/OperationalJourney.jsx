@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import EChart from "./EChart.jsx";
+import { getThemePalette } from "../config/theme.js";
 
 const numberFormat = new Intl.NumberFormat("es-CL");
 
@@ -22,7 +23,8 @@ const RESPONDER_LABELS = {
   cuidador: "Cuidador",
 };
 
-export default function OperationalJourney({ analytics }) {
+export default function OperationalJourney({ analytics, theme }) {
+  const palette = getThemePalette(theme);
   const response = analytics?.respuesta;
   const stages = response?.etapas ?? [];
   const zones = response?.zonas ?? [];
@@ -46,16 +48,16 @@ export default function OperationalJourney({ analytics }) {
       xAxis: {
         type: "value",
         axisLabel: {
-          color: "#71859c",
+          color: palette.onSurfaceVariant,
           fontSize: 9,
           formatter: (value) => formatDuration(value),
         },
-        splitLine: { lineStyle: { color: "rgba(127,145,168,.1)" } },
+        splitLine: { lineStyle: { color: palette.grid } },
       },
       yAxis: {
         type: "category",
         data: selected.map((zone) => zone.codigo),
-        axisLabel: { color: "#9fb0c3", fontSize: 9 },
+        axisLabel: { color: palette.onSurfaceVariant, fontSize: 9 },
         axisLine: { show: false },
         axisTick: { show: false },
       },
@@ -67,7 +69,9 @@ export default function OperationalJourney({ analytics }) {
             value: zone.llegada,
             itemStyle: {
               color:
-                index === selected.length - 1 ? "#ffb84d" : "#4b86c8",
+                index === selected.length - 1
+                  ? palette.warning
+                  : palette.dataBlue,
               borderRadius: [0, 5, 5, 0],
             },
           })),
@@ -76,16 +80,20 @@ export default function OperationalJourney({ analytics }) {
             symbol: "none",
             label: {
               formatter: "Comuna",
-              color: "#8fa1b7",
+              color: palette.onSurfaceVariant,
               fontSize: 8,
             },
-            lineStyle: { color: "#39d4c5", type: "dashed", width: 1 },
+            lineStyle: {
+              color: palette.secondary,
+              type: "dashed",
+              width: 1,
+            },
             data: [{ xAxis: summary.mediana_llegada ?? 0 }],
           },
         },
       ],
     };
-  }, [summary.mediana_llegada, zones]);
+  }, [palette, summary.mediana_llegada, zones]);
 
   if (!response) return null;
 

@@ -45,6 +45,10 @@ export default function EChart({ option, className, ariaLabel }) {
     chartRef.current?.setOption(
       {
         ...option,
+        textStyle: {
+          fontFamily: '"JetBrains Mono", ui-monospace, monospace',
+          ...option.textStyle,
+        },
         tooltip: option.tooltip
           ? { ...option.tooltip, confine: true }
           : option.tooltip,
