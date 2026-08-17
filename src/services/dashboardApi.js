@@ -2,6 +2,49 @@ const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 
 export const dataSource = apiBaseUrl ? "api" : "local";
 
+export function getOperationalAlerts({ estado, limite = 50, signal } = {}) {
+  const params = new URLSearchParams({ limite: String(limite) });
+  if (estado) params.set("estado", estado);
+  return requestJson(
+    `${apiBaseUrl}/api/v1/alertas-operativas?${params}`,
+    signal,
+  );
+}
+
+export function getOperationalAlert(id, { signal } = {}) {
+  return requestJson(
+    `${apiBaseUrl}/api/v1/alertas-operativas/${encodeURIComponent(id)}`,
+    signal,
+  );
+}
+
+export function operationalAlertsEventUrl() {
+  return `${apiBaseUrl}/api/v1/alertas-operativas/eventos`;
+}
+
+export async function updateOperationalAlertStatus(id, estado, { signal } = {}) {
+  const response = await fetch(
+    `${apiBaseUrl}/api/v1/alertas-operativas/${encodeURIComponent(id)}/estado`,
+    {
+      method: "PATCH",
+      signal,
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ estado }),
+    },
+  );
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    const message = Array.isArray(body?.message)
+      ? body.message.join(" ")
+      : body?.message;
+    throw new Error(message || `No fue posible actualizar la alerta (${response.status}).`);
+  }
+  return response.json();
+}
+
 let localSnapshotPromise;
 const summaryCache = new Map();
 const mapCache = new Map();
@@ -17,7 +60,13 @@ async function requestJson(url, signal) {
     headers: { Accept: "application/json" },
   });
   if (!response.ok) {
-    throw new Error(`No fue posible cargar ${url} (${response.status}).`);
+    const body = await response.json().catch(() => null);
+    const message = Array.isArray(body?.message)
+      ? body.message.join(" ")
+      : body?.message;
+    throw new Error(
+      message || `No fue posible cargar ${url} (${response.status}).`,
+    );
   }
   return response.json();
 }
@@ -98,6 +147,8 @@ function normalizeApiResponse(summary, map) {
       fechaCorte: summary.metadata.fecha_corte,
       periodo: summary.metadata.periodo,
       comuna: summary.metadata.comuna,
+      contingencia:
+        summary.metadata.contingencia ?? map.metadata?.contingencia ?? null,
     },
     resumen: {
       usuarios: summary.resumen_operacional.usuarios,
@@ -173,10 +224,15 @@ function cachedRequest(cache, url, ttl) {
   if (cached && Date.now() - cached.createdAt < ttl) return cached.promise;
   const entry = {
     createdAt: Date.now(),
-    promise: requestJson(url).catch((error) => {
-      cache.delete(url);
-      throw error;
-    }),
+    promise: requestJson(url)
+      .then((data) => {
+        if (data?.metadata?.contingencia) cache.delete(url);
+        return data;
+      })
+      .catch((error) => {
+        cache.delete(url);
+        throw error;
+      }),
   };
   cache.set(url, entry);
   return entry.promise;
@@ -202,6 +258,20 @@ async function getLocalSnapshot() {
     localSnapshotPromise = requestJson(url).then(validateLocalSnapshot);
   }
   return localSnapshotPromise;
+}
+
+export async function getDashboardFallbackSnapshot() {
+  const snapshot = await getLocalSnapshot();
+  return {
+    ...snapshot,
+    metadata: {
+      ...snapshot.metadata,
+      contingencia: {
+        activa: true,
+        motivo: "snapshot_local_por_indisponibilidad_api",
+      },
+    },
+  };
 }
 
 function buildLocalAlertDetail(alert) {

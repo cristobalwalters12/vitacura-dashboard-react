@@ -11,12 +11,23 @@ import KpiCard from "./components/KpiCard.jsx";
 import InsightCenter from "./components/InsightCenter.jsx";
 import OperationalFilters from "./components/OperationalFilters.jsx";
 import {
+  NewOperationalAlert,
+  OperationalAlertQueue,
+  OperationalQueueButton,
+} from "./components/OperationalAlertCenter.jsx";
+import {
+  SettingsPage,
+  StyleGuide,
+} from "./components/DesignSystemPages.jsx";
+import {
   CATEGORY,
   PERIODS,
   PRIORITY_ORDER,
 } from "./config/dashboard.js";
 import { useDashboardData } from "./hooks/useDashboardData.js";
 import { useAlertDetail } from "./hooks/useAlertDetail.js";
+import { useOperationalAlerts } from "./hooks/useOperationalAlerts.js";
+import { useTheme } from "./hooks/useTheme.js";
 import {
   alertInBounds,
   alertMatchesFilters,
@@ -30,6 +41,9 @@ import {
 } from "./utils/formatters.js";
 
 const DashboardMap = lazy(() => import("./components/DashboardMap.jsx"));
+const OperationalAlertDetail = lazy(
+  () => import("./components/OperationalAlertDetail.jsx"),
+);
 const EChart = lazy(() => import("./components/EChart.jsx"));
 const OperationalJourney = lazy(
   () => import("./components/OperationalJourney.jsx"),
@@ -187,6 +201,7 @@ function buildZoneGeoJson(data, filteredAlerts) {
 function Dashboard({
   data,
   source,
+  theme,
   refreshing,
   staleError,
   analyticsLoading,
@@ -198,10 +213,37 @@ function Dashboard({
   onFiltersChange,
   onClearOperationalFilters,
   onBoundsChange,
+  onThemeChange,
+  onNavigate,
 }) {
   const activeSection = useActiveSection();
   const [mode, setMode] = useState("calor");
   const [selectedAlert, setSelectedAlert] = useState(null);
+  const [operationalQueueOpen, setOperationalQueueOpen] = useState(false);
+  const [operationalAlert, setOperationalAlert] = useState(null);
+  const [operationalOpeningId, setOperationalOpeningId] = useState(null);
+  const [operationalOpenError, setOperationalOpenError] = useState(null);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const operational = useOperationalAlerts();
+  useEffect(() => {
+    setOperationalOpenError(null);
+  }, [operational.incoming?.id]);
+  const openOperationalAlert = async (alert) => {
+    setOperationalOpeningId(alert.id);
+    setOperationalOpenError(null);
+    try {
+      const detail = await operational.loadDetail(alert);
+      setOperationalAlert(detail);
+      return true;
+    } catch (error) {
+      setOperationalOpenError(
+        error.message || "No fue posible calcular la ruta de esta alerta.",
+      );
+      return false;
+    } finally {
+      setOperationalOpeningId(null);
+    }
+  };
   const {
     detail: selectedAlertDetail,
     loading: alertDetailLoading,
@@ -436,6 +478,32 @@ function Dashboard({
     [comparison],
   );
 
+  const chartColors = useMemo(
+    () =>
+      theme === "dark"
+        ? {
+            text: "#C0C4CC",
+            line: "rgba(192,196,204,.16)",
+            accent: "#00EEFC",
+            accentArea: "rgba(0,238,252,.28)",
+            accentTransparent: "rgba(0,238,252,0)",
+            comparison: "rgba(192,196,204,.68)",
+            surface: "#151A1D",
+            emphasis: "#FFFFFF",
+          }
+        : {
+            text: "#45464D",
+            line: "rgba(69,70,77,.16)",
+            accent: "#006970",
+            accentArea: "rgba(0,105,112,.2)",
+            accentTransparent: "rgba(0,105,112,0)",
+            comparison: "rgba(69,70,77,.62)",
+            surface: "#FFFFFF",
+            emphasis: "#191C1E",
+          },
+    [theme],
+  );
+
   const trendOption = useMemo(
     () => ({
       animationDurationUpdate: 450,
@@ -449,18 +517,18 @@ function Dashboard({
         boundaryGap: false,
         data: trend.map((item) => item.date),
         axisLabel: {
-          color: "#7f91a8",
+          color: chartColors.text,
           hideOverlap: true,
           formatter: (value) => value.slice(5),
         },
-        axisLine: { lineStyle: { color: "#23354b" } },
+        axisLine: { lineStyle: { color: chartColors.line } },
       },
       yAxis: {
         type: "value",
         name: "Alertas / día",
-        nameTextStyle: { color: "#7f91a8" },
-        axisLabel: { color: "#7f91a8" },
-        splitLine: { lineStyle: { color: "rgba(127,145,168,.13)" } },
+        nameTextStyle: { color: chartColors.text },
+        axisLabel: { color: chartColors.text },
+        splitLine: { lineStyle: { color: chartColors.line } },
       },
       series: [
         {
@@ -469,7 +537,7 @@ function Dashboard({
           data: trend.map((item) => item.total),
           symbol: "none",
           smooth: 0.28,
-          lineStyle: { color: "#39d4c5", width: 2.4 },
+          lineStyle: { color: chartColors.accent, width: 2.4 },
           areaStyle: {
             color: {
               type: "linear",
@@ -478,8 +546,8 @@ function Dashboard({
               x2: 0,
               y2: 1,
               colorStops: [
-                { offset: 0, color: "rgba(57,212,197,.35)" },
-                { offset: 1, color: "rgba(57,212,197,0)" },
+                { offset: 0, color: chartColors.accentArea },
+                { offset: 1, color: chartColors.accentTransparent },
               ],
             },
           },
@@ -493,7 +561,7 @@ function Dashboard({
                 symbol: "none",
                 smooth: 0.28,
                 lineStyle: {
-                  color: "rgba(154,171,192,.72)",
+                  color: chartColors.comparison,
                   width: 1.5,
                   type: "dashed",
                 },
@@ -502,7 +570,7 @@ function Dashboard({
           : []),
       ],
     }),
-    [comparison, trend],
+    [chartColors, comparison, trend],
   );
 
   const categoryOption = useMemo(
@@ -514,7 +582,7 @@ function Dashboard({
       legend: {
         bottom: 0,
         left: "center",
-        textStyle: { color: "#9aabc0" },
+        textStyle: { color: chartColors.text },
         itemWidth: 10,
         itemHeight: 10,
         formatter: (name) => categoryInfo(name).label,
@@ -525,13 +593,13 @@ function Dashboard({
           radius: ["47%", "70%"],
           center: ["50%", "42%"],
           avoidLabelOverlap: true,
-          itemStyle: { borderColor: "#0d1a2b", borderWidth: 3 },
+          itemStyle: { borderColor: chartColors.surface, borderWidth: 3 },
           label: { show: false },
           emphasis: {
             label: {
               show: true,
               formatter: "{d}%",
-              color: "#f4f8fb",
+              color: chartColors.emphasis,
               fontSize: 16,
             },
           },
@@ -542,7 +610,7 @@ function Dashboard({
         },
       ],
     }),
-    [categories],
+    [categories, chartColors],
   );
 
   return (
@@ -552,10 +620,10 @@ function Dashboard({
       </a>
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-mark">V</div>
+          <div className="brand-mark" aria-hidden="true"><i /></div>
           <div>
-            <strong>Vitacura</strong>
-            <span>Comunidad Segura</span>
+            <strong>Lyngus Halo</strong>
+            <span>Inteligencia que cuida</span>
           </div>
         </div>
         <nav aria-label="Secciones del tablero">
@@ -608,6 +676,16 @@ function Dashboard({
           >
             <span>◎</span>Zonas
           </a>
+          <a
+            className="sidebar-design-link"
+            href="/styleguide"
+            onClick={(event) => {
+              event.preventDefault();
+              onNavigate("/styleguide");
+            }}
+          >
+            <span>◈</span>Paleta & Tipografía
+          </a>
         </nav>
         <div className="sidebar-status">
           <span className="status-dot" />
@@ -629,19 +707,55 @@ function Dashboard({
             <span className="eyebrow">Municipalidad de Vitacura</span>
             <h1>Panorama comunitario</h1>
           </div>
-          <div className="topbar-meta">
-            <span
-              className={`live-badge ${refreshing ? "syncing" : ""}`}
-              aria-live="polite"
+          <div className="topbar-actions">
+            <OperationalQueueButton
+              alerts={operational.alerts}
+              connected={operational.connected}
+              onClick={() => setOperationalQueueOpen(true)}
+            />
+            <div className="topbar-meta">
+              <span
+                className={`live-badge ${refreshing ? "syncing" : ""}`}
+                aria-live="polite"
+              >
+                <i />
+                {refreshing
+                  ? "Actualizando datos"
+                  : source === "api"
+                    ? "API conectada"
+                    : "Escenario demostrativo"}
+              </span>
+              <span>Corte analítico {updatedAtLabel}</span>
+            </div>
+            <button
+              className="theme-toggle-button"
+              type="button"
+              onClick={() => onThemeChange(theme === "dark" ? "light" : "dark")}
+              aria-label={`Cambiar a modo ${theme === "dark" ? "claro" : "oscuro"}`}
+              title={`Modo ${theme === "dark" ? "claro" : "oscuro"}`}
             >
-              <i />
-              {refreshing
-                ? "Actualizando datos"
-                : source === "api"
-                  ? "API conectada"
-                  : "Escenario demostrativo"}
-            </span>
-            <span>Corte analítico {updatedAtLabel}</span>
+              <span aria-hidden="true">{theme === "dark" ? "☼" : "◐"}</span>
+            </button>
+            <div className="profile-menu-wrap">
+              <button
+                className="profile-button"
+                type="button"
+                onClick={() => setProfileOpen((current) => !current)}
+                aria-expanded={profileOpen}
+                aria-haspopup="menu"
+                aria-label="Abrir menú de perfil"
+              >
+                <span>LH</span>
+                <i aria-hidden="true" />
+              </button>
+              {profileOpen && (
+                <div className="profile-menu" role="menu">
+                  <div><strong>Centro operacional</strong><small>Municipalidad de Vitacura</small></div>
+                  <button type="button" role="menuitem" onClick={() => onNavigate("/styleguide")}><span>◈</span>Paleta & Tipografía</button>
+                  <button type="button" role="menuitem" onClick={() => onNavigate("/settings")}><span>⚙</span>Configuración</button>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
@@ -1018,7 +1132,7 @@ function Dashboard({
         </section>
 
         <footer>
-          <span>Vitacura Comunidad Segura · Prototipo analítico</span>
+          <span>Lyngus Halo · Prototipo analítico</span>
           <span>
             Incidentes sintéticos · Geometrías municipales y red vial pública
           </span>
@@ -1038,11 +1152,57 @@ function Dashboard({
           />
         </Suspense>
       )}
+      <NewOperationalAlert
+        alert={operational.incoming}
+        busy={operationalOpeningId === operational.incoming?.id}
+        error={operationalOpenError}
+        onDismiss={operational.dismissIncoming}
+        onReview={async () => {
+          const alert = operational.incoming;
+          if (!alert) return;
+          if (await openOperationalAlert(alert)) {
+            operational.dismissIncoming();
+          }
+        }}
+      />
+      {operationalQueueOpen && (
+        <OperationalAlertQueue
+          alerts={operational.alerts}
+          loading={operational.loading}
+          error={operational.error}
+          connected={operational.connected}
+          openingId={operationalOpeningId}
+          openError={operationalOpenError}
+          onRetry={operational.retry}
+          onClose={() => setOperationalQueueOpen(false)}
+          onSelect={async (alert) => {
+            if (await openOperationalAlert(alert)) {
+              setOperationalQueueOpen(false);
+            }
+          }}
+        />
+      )}
+      {operationalAlert && (
+        <Suspense fallback={<DetailModuleFallback />}>
+          <OperationalAlertDetail
+            alert={operationalAlert}
+            theme={theme}
+            onClose={() => setOperationalAlert(null)}
+            onStatusChange={async (estado) => {
+              const updated = await operational.updateStatus(
+                operationalAlert,
+                estado,
+              );
+              setOperationalAlert(updated);
+            }}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }
 
-export default function App() {
+function DashboardApp({ theme, onThemeChange, onNavigate }) {
   const [filters, setFilters] = useState({
     dias: 90,
     categoria: "todas",
@@ -1109,6 +1269,7 @@ export default function App() {
     <Dashboard
       data={data}
       source={source}
+      theme={theme}
       refreshing={loading}
       staleError={error}
       analyticsLoading={analyticsLoading}
@@ -1120,6 +1281,63 @@ export default function App() {
       onFiltersChange={updateFilters}
       onClearOperationalFilters={clearOperationalFilters}
       onBoundsChange={updateBounds}
+      onThemeChange={onThemeChange}
+      onNavigate={onNavigate}
+    />
+  );
+}
+
+function appRoute(pathname) {
+  if (pathname === "/styleguide" || pathname === "/estilo") return "styleguide";
+  if (pathname === "/settings") return "settings";
+  return "dashboard";
+}
+
+export default function App() {
+  const { theme, setTheme } = useTheme();
+  const [route, setRoute] = useState(() => appRoute(window.location.pathname));
+
+  useEffect(() => {
+    const handlePopState = () => setRoute(appRoute(window.location.pathname));
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  const navigate = useCallback((pathname) => {
+    if (window.location.pathname !== pathname) {
+      window.history.pushState({}, "", pathname);
+    }
+    setRoute(appRoute(pathname));
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }, []);
+
+  useEffect(() => {
+    if (route === "dashboard") document.title = "Lyngus Halo · Panorama comunitario";
+  }, [route]);
+
+  if (route === "styleguide") {
+    return (
+      <StyleGuide
+        theme={theme}
+        onThemeChange={setTheme}
+        onNavigate={navigate}
+      />
+    );
+  }
+  if (route === "settings") {
+    return (
+      <SettingsPage
+        theme={theme}
+        onThemeChange={setTheme}
+        onNavigate={navigate}
+      />
+    );
+  }
+  return (
+    <DashboardApp
+      theme={theme}
+      onThemeChange={setTheme}
+      onNavigate={navigate}
     />
   );
 }

@@ -1,0 +1,9 @@
+services:
+  camera-gateway:
+    image: bluenviron/mediamtx:1.18.2-ffmpeg
+    container_name: lyngus-halo-camera-gateway
+    restart: unless-stopped
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./camera-gateway/mediamtx.yml:/mediamtx.yml:ro

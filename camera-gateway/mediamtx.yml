@@ -1,0 +1,31 @@
+logLevel: info
+
+rtsp: false
+rtmp: true
+rtmpAddress: :1935
+webrtc: false
+srt: false
+
+hls: true
+hlsAddress: :8888
+hlsAllowOrigins: ["*"]
+hlsVariant: lowLatency
+
+paths:
+  stream2:
+    source: publisher
+    runOnDemand: >-
+      ffmpeg -nostdin -hide_banner -loglevel warning
+      -rw_timeout 15000000
+      -fflags +genpts
+      -i rtmp://146.181.37.100:1935/live/stream2
+      -map 0:v:0 -map 0:a:0?
+      -c:v libx264 -preset veryfast -tune zerolatency
+      -pix_fmt yuv420p -profile:v main -bf 0
+      -r 30 -g 30 -keyint_min 30 -sc_threshold 0
+      -b:v 2500k -maxrate 3000k -bufsize 5000k
+      -c:a copy
+      -f flv rtmp://127.0.0.1:1935/stream2
+    runOnDemandRestart: true
+    runOnDemandStartTimeout: 20s
+    runOnDemandCloseAfter: 30s

@@ -39,4 +39,8 @@ export const MAP_STYLE_URL =
   import.meta.env.VITE_MAP_STYLE_URL ||
   "https://tiles.openfreemap.org/styles/liberty";
 
+export const CAMERA_STREAM_URL =
+  import.meta.env.VITE_CAMERA_STREAM_URL ||
+  "http://localhost:8888/stream2/index.m3u8";
+
 export const PRIORITY_ORDER = { P1: 0, P2: 1, P3: 2, P4: 3 };

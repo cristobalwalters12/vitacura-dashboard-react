@@ -30,10 +30,15 @@ export default defineConfig({
         manualChunks(id) {
           if (!id.includes("node_modules")) return undefined;
           if (id.includes("maplibre-gl")) return "map-engine";
+          if (id.includes("/hls.js/")) return "video-engine";
           if (id.includes("echarts") || id.includes("zrender")) {
             return "chart-engine";
           }
-          if (id.includes("react") || id.includes("scheduler")) {
+          if (
+            id.includes("/node_modules/react/") ||
+            id.includes("/node_modules/react-dom/") ||
+            id.includes("/node_modules/scheduler/")
+          ) {
             return "react-runtime";
           }
           return undefined;

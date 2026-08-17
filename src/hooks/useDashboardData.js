@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   dataSource,
   getDashboardAnalytics,
+  getDashboardFallbackSnapshot,
   getDashboardSnapshot,
 } from "../services/dashboardApi.js";
 
@@ -61,11 +62,21 @@ export function useDashboardData(filters) {
           ...JSON.parse(queryKey),
           signal,
         });
-        setState({ data, loading: false, error: null });
+        const contingencyError = data.metadata?.contingencia
+          ? new Error(
+              "PostgreSQL está temporalmente fuera de línea; se muestran datos de contingencia.",
+            )
+          : null;
+        setState({ data, loading: false, error: contingencyError });
       } catch (error) {
         if (error.name === "AbortError") return;
+        let fallback = null;
+        if (dataSource === "api") {
+          fallback = await getDashboardFallbackSnapshot().catch(() => null);
+        }
+        if (signal?.aborted) return;
         setState((current) => ({
-          data: current.data,
+          data: current.data ?? fallback,
           loading: false,
           error,
         }));
@@ -77,17 +88,28 @@ export function useDashboardData(filters) {
   const loadAnalytics = useCallback(
     async (signal) => {
       if (dataSource !== "api") return;
-      setAnalyticsState({ data: null, loading: true, error: null });
+      setAnalyticsState((current) => ({
+        ...current,
+        loading: true,
+        error: null,
+      }));
       try {
         await waitForBrowserIdle(signal);
         const data = await getDashboardAnalytics({
           ...JSON.parse(analyticsKey),
           signal,
         });
-        setAnalyticsState({ data, loading: false, error: null });
+        const contingencyError = data?.metadata?.contingencia
+          ? new Error("La analítica avanzada se sirve desde la caché de contingencia.")
+          : null;
+        setAnalyticsState({ data, loading: false, error: contingencyError });
       } catch (error) {
         if (error.name === "AbortError") return;
-        setAnalyticsState({ data: null, loading: false, error });
+        setAnalyticsState((current) => ({
+          data: current.data,
+          loading: false,
+          error,
+        }));
       }
     },
     [analyticsKey],
@@ -105,6 +127,18 @@ export function useDashboardData(filters) {
     return () => controller.abort();
   }, [loadAnalytics]);
 
+  useEffect(() => {
+    if (!state.error) return undefined;
+    const timer = window.setTimeout(() => load(), 5_000);
+    return () => window.clearTimeout(timer);
+  }, [load, state.error]);
+
+  useEffect(() => {
+    if (!analyticsState.error || dataSource !== "api") return undefined;
+    const timer = window.setTimeout(() => loadAnalytics(), 8_000);
+    return () => window.clearTimeout(timer);
+  }, [analyticsState.error, loadAnalytics]);
+
   const data = useMemo(
     () =>
       state.data
@@ -112,7 +146,7 @@ export function useDashboardData(filters) {
             ...state.data,
             analiticaServidor:
               dataSource === "api"
-                ? analyticsState.data
+                ? analyticsState.data ?? state.data.analiticaServidor
                 : state.data.analiticaServidor,
           }
         : null,
